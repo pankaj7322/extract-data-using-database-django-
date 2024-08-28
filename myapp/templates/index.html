@@ -1,0 +1,259 @@
+<!-- myapp/templates/index.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recorder and Text Converter</title>
+
+      <!-- CSRF Token -->
+    <meta name="csrf-token" content="{% csrf_token %}">
+   
+    
+    <!-- Google Fonts for Better Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <style>
+        /* Basic styling */
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 80%;  /* Full width for large screens */
+            max-width: 800px;
+            height: 70%;  /* Adjust height to look balanced */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .recording-icon {
+            font-size: 60px;
+            color: red;
+            animation: pulse 1.5s infinite;
+            margin-bottom: 30px;
+            cursor: pointer;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+        }
+
+        #input-box {
+            width: calc(100% - 10px);
+            padding: 20px;
+            font-size: 18px;
+            margin: 20px 0;
+            border: none;
+            border-radius: 12px;
+            background-color: #f7f9fc;
+            box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            resize: none; 
+            box-sizing: border-box;  
+            text-align:center;
+        }
+
+        #input-box::placeholder {
+            color: #b0b3b8;
+            font-style: italic;
+            font-weight: bold;
+            line-height: 0;
+            text-align:center;
+        }
+
+        #input-box:focus {
+            background-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+            outline: none;
+            transform: scale(1.01);
+        }
+
+        .button {
+            padding: 15px 25px;
+            font-size: 18px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            color: #ffffff;
+            background-color: #007bff;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin: 10px;
+        }
+
+        .button:hover {
+            background-color: #0056b3;
+        }
+
+        .button.record {
+            background-color: #28a745;
+        }
+
+        .button.record:hover {
+            background-color: #218838;
+        }
+    </style>
+    <script>
+        // Function to show alert message
+        function showAlert(message, type) {
+            alert(message);  // Simple alert box
+        }
+
+        window.onload = function() {
+            // Check if there's an error message
+            const error = "{{ error|escapejs }}"; // Escape JS to handle special characters
+            if (error) {
+                showAlert(error, 'error');
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1> Voice Conversation to DB Query </h1>
+        <!-- Animated Recording Icon -->
+        <div class="recording-icon">
+            <i class="fas fa-microphone"></i> <!-- Font Awesome microphone icon -->
+        </div>
+
+        <!-- Input Box -->
+        {% comment %} <textarea id="input-box" rows="5" placeholder="Your transcribed text will appear here..."></textarea> {% endcomment %}
+
+        <form id="transcriptionForm" action="{% url 'submit_form' %}" method="post">
+            {% csrf_token %}
+            <!-- Input Box -->
+            <textarea id="input-box" name="input_text" rows="2" placeholder="Your transcribed text will appear here..."></textarea>
+
+            <!-- Buttons -->
+            <button type="button" class="button record" id="recordButton" onclick="toggleRecording()">Start Recording</button>
+            <button type="submit" class="button">Submit</button>
+        </form>
+        <!-- Buttons -->
+        {% comment %} <button class="button record" id="recordButton" onclick="toggleRecording()">Start Recording</button>
+        <button class="button" onclick="submitText()">Submit</button> {% endcomment %}
+    </div>
+
+    <!-- JavaScript for interactivity -->
+    <script>
+        function getCsrfToken(){
+            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        }
+        function submitText(){
+            const transcribedText = document.getElementById('input-box').value;
+            if (!transcribedText){
+                alert("Please enter or record text first")
+                return;
+            }
+            fetch('/generate-sql/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({ question: transcribedText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sql_query) {
+                    console.log("SQL Query generated:", data.sql_query);  // Log SQL query to console
+                    alert("Generated SQL Query: " + data.sql_query);
+                } else {
+                    console.log("Failed to generate SQL query.");  // Log failure message to console
+                    alert("Failed to generate SQL query.");
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+        // let mediaRecorder;
+        // let audioChunks = [];
+        // let isRecording = false;
+
+      
+        
+        // async function sendAudioToBackend(audioBlob) {
+         //    const formData = new FormData();
+         //    formData.append('audio', audioBlob, 'recording.wav');
+        
+        //     try {
+        //      const response = await fetch('/record_audio/', {
+        //            method: 'POST',
+         //           body: formData
+         //       });
+         //       const result = await response.json();
+         //       document.querySelector('.input-box').value = result.transcription || 'Transcription failed.';
+         //   } catch (error) {
+         //       console.error('Error:', error);
+         //   }
+        //}
+        
+        //function startRecording() {
+         //   navigator.mediaDevices.getUserMedia({ audio: true })
+         //       .then(stream => {
+         //           mediaRecorder = new MediaRecorder(stream);
+         //           mediaRecorder.ondataavailable = event => {
+         //               audioChunks.push(event.data);
+         //           };
+         //           mediaRecorder.onstop = () => {
+         //               const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+         //               sendAudioToBackend(audioBlob);
+         //               audioChunks = []; // Clear chunks for next recording
+         //           };
+         //           mediaRecorder.start();
+         //           console.log('Recording started');
+         //       })
+         //       .catch(error => {
+         //           console.error('Error accessing media devices.', error);
+         //       });
+        // }
+        
+        // function stopRecording() {
+        //    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        //         mediaRecorder.stop();
+        //         console.log('Recording stopped');
+        //     }
+        // }
+        
+        // function toggleRecording() {
+        //     if (isRecording) {
+        //        stopRecording();
+        //        isRecording = false;
+        //        document.getElementById('recordButton').textContent = 'Start Recording';
+        //        document.querySelector('.recording-icon i').classList.replace('fa-stop', 'fa-microphone');
+        //        alert('Recording stopped.');
+        //    } else {
+        //        startRecording();
+        //       isRecording = true;
+        //        document.getElementById('recordButton').textContent = 'Stop Recording';
+        //        document.querySelector('.recording-icon i').classList.replace('fa-microphone', 'fa-stop');
+        //        alert('Recording started...');
+        //    }
+        // } 
+
+     
+    </script>
+</body>
+</html>
