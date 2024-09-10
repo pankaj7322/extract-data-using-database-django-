@@ -1,85 +1,82 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Query Results</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      table,
+      th,
+      td {
+        border: 1px solid #ddd;
+      }
+      th,
+      td {
+        padding: 8px;
+        text-align: left;
+      }
 
-        table, th, td {
-            border: 1px solid #ddd;
-        }
+      th {
+        background-color: #f4f4f4;
+      }
 
-        th, td {
-            padding: 8px;
-            text-align: left;
-        }
+      .error {
+        color: red;
+      }
 
-        th {
-            background-color: #f4f4f4;
-        }
+      .back-button {
+        display: inline-block;
+        padding: 10px 20px;
+        font-size: 16px;
+        color: #fff;
+        background-color: #007bff;
+        border: none;
+        border-radius: 4px;
+        text-decoration: none;
+        text-align: center;
+      }
 
-        .error {
-            color: red;
-        }
-
-        .back-button {
-            display: inline-block;
-            padding: 10px 20px;
-            font-size: 16px;
-            color: #fff;
-            background-color: #007bff;
-            border: none;
-            border-radius: 4px;
-            text-decoration: none;
-            text-align: center;
-        }
-
-        .back-button:hover {
-            background-color: #0056b3;
-        }
+      .back-button:hover {
+        background-color: #0056b3;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Query Results</h1>
     <a href="{% url 'index' %}" class="back-button">Back to Form</a>
 
     {% if error_message %}
-        <p class="error">{{ error_message }}</p>
+    <p class="error">{{ error_message }}</p>
     {% else %}
-        <p>SQL Query: <strong>{{ sql_query }}</strong></p>
-        <table>
-            <thead>
-                <tr>
-                    {% if results %}
-                        {% for column in results.0 %}
-                            <th>{{ column }}</th>
-                        {% endfor %}
-                    {% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in results %}
-                    <tr>
-                        {% for value in row %}
-                            <td>{{ value }}</td>
-                        {% endfor %}
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <p>SQL Query: <strong>{{ sql_query }}</strong></p>
+    <table>
+      <thead>
+        <tr>
+          {% if results %} {% for column in results.0 %}
+          <th>{{ column }}</th>
+          {% endfor %} {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in results %}
+        <tr>
+          {% for value in row %}
+          <td>{{ value }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
     {% endif %}
-
-    
-</body>
+  </body>
 </html>

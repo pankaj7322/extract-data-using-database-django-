@@ -5,6 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.files.storage import default_storage
 from django.views.decorators.csrf import csrf_exempt
 import speech_recognition as sr
+import soundfile as sf
+from typing import List,Dict
 
 from django.core.files.base import ContentFile
 import json
@@ -25,6 +27,7 @@ from django.urls import reverse_lazy
 from django.contrib.auth.views import LoginView
 
 
+
 def homepage(request):
     return render(request, 'homepage.html')
 #################################################################
@@ -36,26 +39,31 @@ import os
 
 # Load the tokenizer and model
 tokenizer = AutoTokenizer.from_pretrained("juierror/flan-t5-text2sql-with-schema-v2")
-model1 = AutoModelForSeq2SeqLM.from_pretrained("juierror/flan-t5-text2sql-with-schema-v2")
+model = AutoModelForSeq2SeqLM.from_pretrained("juierror/flan-t5-text2sql-with-schema-v2")
 
+# Function to create the prompt
 def get_prompt(tables, question):
-    prompt = f"convert question and table into SQL query. tables: {tables}. question: {question}"
+    prompt = f"convet question and table into SQL query. tables: {tables}. question: {question}"
     return prompt
-def prepare_input(question: str, tables: dict[str, list[str]]):
-    tables = [f"{table_name}({','.join(tables[table_name])})" for table_name in tables]
-    tables = ", ".join(tables)
-    prompt = get_prompt(tables, question)
-    
-    # Explicitly enable truncation
+
+# Function to prepare input for the model
+def prepare_input(question: str, tables: Dict[str, List[str]]):
+    # Format table information
+    table_name = list(tables.keys())[0]
+    columns = tables[table_name]
+    tables_str = f"{table_name}({','.join(columns)})"
+    prompt = get_prompt(tables_str, question)
     input_ids = tokenizer(prompt, max_length=512, truncation=True, return_tensors="pt").input_ids
     return input_ids
 
-def inference(question: str, tables: dict[str, list[str]]) -> str:
+# Function to perform inference and get SQL query
+def inference(question: str, tables: Dict[str, List[str]]) -> str:
     input_data = prepare_input(question=question, tables=tables)
-    input_data = input_data.to(model1.device)
-    outputs = model1.generate(inputs=input_data, num_beams=10, max_length=512)
+    input_data = input_data.to(model.device)
+    outputs = model.generate(input_ids=input_data, num_beams=5, max_length=512)
     result = tokenizer.decode(token_ids=outputs[0], skip_special_tokens=True)
     return result
+
 
 def sql_query_view(request):
     pass
@@ -64,26 +72,6 @@ def sql_query_view(request):
 
         # Generate SQL query using the inference function
         
-
-
-# *******************************************************************************************
-
-# def login_view(request):
-#     if request.method == "POST":
-#         username = request.POST['username']
-#         password = request.POST['password']
-
-#         if username == 'testuser' and password == 'testpass':
-
-#             user = authenticate(request, username=username, password=password)
-#             if user is not None:
-#                 login(request, user)
-#                 return redirect('index')  # Redirect to the form page after login
-#             else:
-#                return render(request, 'login.html', {'error': 'Invalid credentials'})
-#         else:
-#             return render(request, 'login.html')
-#     return render(request, 'login.html')
 
 def login_view(request):
     if request.method == "POST":
@@ -106,14 +94,17 @@ def index(request):
     return render(request, 'index.html')
 
 #####################################
+
 @login_required
 def submit_form(request):
     if request.method == 'POST':
-        question = request.POST.get('input_text', '')
+        question = request.POST.get('input_text')
 
-        tables = {"employees": ["name", "age", "department", "salary"]}
+        tables = {"employees": ["id", "name", "age","department", "salary"]}
 
         sql_query = inference(question, tables)
+        print("question question", question)
+        print("sql sql sql", sql_query)
         conn = sqlite3.connect('employee_database.db')
         cursor = conn.cursor()
         results = []
@@ -137,112 +128,40 @@ def submit_form(request):
 
     # If GET request, render the initial form
     return render(request, 'submit_form.html')
-###########################################
+def audio_to_text(file_path):
+    # Convert audio to WAV format
+    sound = AudioSegment.from_file(file_path)
+    wav_path = file_path.replace('.mp3', '.wav')
+    sound.export(wav_path, format='wav')
+
+    # Use SpeechRecognition to convert to text
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(wav_path) as source:
+        audio_data = recognizer.record(source)
+        text = recognizer.recognize_google(audio_data)
+
+    # Clean up
+    os.remove(wav_path)
+
+    return text
 
 
 
-###########################################
+def upload_audio(request):
+    transcription = None
+    if request.method == 'POST' and request.FILES.get('audio_file'):
+        audio_file = request.FILES['audio_file']
+        file_name = 'uploaded_audio.wav'
 
-@csrf_exempt
-def record_audio(request):
-    if request.method == 'POST' and request.FILES.get('audio'):
-        audio_file = request.FILES['audio']
-        file_name = 'recording.mp3'
-        
-        # Save the file to the MEDIA folder
+        # Save the file to the media folder
         file_path = default_storage.save(os.path.join('media', file_name), ContentFile(audio_file.read()))
-        file_url = default_storage.url(file_path)
 
-
-        # Full path of the saved audio file
+        # Get the full path of the saved file
         full_file_path = os.path.join(default_storage.location, file_path)
 
-        #Load the whisper model and processor from Hugging Face
+        result = audio_to_text(full_file_path)
 
-        model_name = "openai/whisper-small"
-        model = WhisperForConditionalGeneration.from_pretrained(model_name)
-        processor = WhisperProcessor.from_pretrained(model_name)
+        # Convert audio to text using Whisper
+        transcription = result
 
-        audio_input, _ =  torchaudio.load(full_file_path)
-
-        inputs = processor(audio_input.squeeze().numpy(), return_tensors = "pt", sampling_rate = 16000)
-
-        with torch.no_grad():
-            logits = model(**inputs).logits
-
-        # Decode the transcription
-        predicted_ids = torch.argmax(logits, dim=-1)
-        transcription = processor.decode(predicted_ids[0])
-        
-        return JsonResponse({'status': 'success', 'file_url': file_url, 'transcription': file_url})
-    
-    return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
-
-
-
-# *************************************************************************************************
-
-# from django.core.files.storage import default_storage
-# from django.core.files.base import ContentFile
-# from django.http import JsonResponse
-# from django.views.decorators.csrf import csrf_exempt
-# import os
-
-# # Import Whisper model from Hugging Face transformers library
-# from transformers import pipeline
-
-# # Load Whisper model (make sure you have the correct model installed)
-# whisper_model = pipeline("automatic-speech-recognition", model="openai/whisper-base")
-
-# @csrf_exempt
-# def record_audio(request):
-#     if request.method == 'POST' and request.FILES.get('audio'):
-#         audio_file = request.FILES['audio']
-#         file_name = 'recording.wav'
-        
-#         # Save the file to the MEDIA folder
-#         file_path = default_storage.save(os.path.join('media', file_name), ContentFile(audio_file.read()))
-#         file_url = default_storage.url(file_path)
-        
-#         # Full path of the saved audio file
-#         full_file_path = os.path.join(default_storage.location, file_path)
-
-#         # Use Whisper model to transcribe the audio file
-#         try:
-#             result = whisper_model(full_file_path)
-#             transcription = result['text']
-#         except Exception as e:
-#             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
-#         return JsonResponse({'status': 'success', 'file_url': file_url, 'transcription': transcription})
-    
-#     return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
-
-
-
-
-# ****************************************************************************************************
-
-# def record_audio(request):
-#     if request.method == 'POST' and 'audio' in request.FILES:
-#         audio_file  = request.FILES['audio']
-
-#         recognizer = sr.Recognizer()
-
-#         with sr.AudioFile(audio_file) as source:
-#             audio = recognizer.record(source)
-
-#         try:
-#             transcription = recognizer.recognize_google(audio)
-#         except sr.UnknownValueError:
-#             transcription = "Google will not understand your voice"
-#         except sr.RequestError as e:
-#             transcription = f"Could not request from google web Speech API {e}"
-
-#          # Print the transcription to the command line
-#         print(f"Transcription: {transcription}")
-
-#         return JsonResponse({'transcription:', transcription})
-
-#     return JsonResponse({'error': 'Invalid Request'} ,status = 400)
-
+    return render(request, 'index.html', {'transcription': transcription})
